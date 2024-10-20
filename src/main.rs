@@ -1,56 +1,20 @@
-use std::{ io, thread };
-use std::time::Duration;
-
-use tui::{
-    backend::CrosstermBackend,
-    widgets::{Widget, Block, Borders},
-    layout::{Layout, Constraint, Direction},
-    Terminal
-};
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use std::error::Error;
 
 mod youtube;
 mod music;
+mod ui;
 
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<(), Box<dyn Error>> {
 
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
 
-    terminal.draw(|f| {
-        let size = f.size();
-        let block = Block::default()
-            .title("Block")
-            .borders(Borders::ALL);
-        f.render_widget(block, size);
-    })?;
-
-    thread::sleep(Duration::from_millis(3000));
-
-    // restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    Ok(())
+    ui::test::test_render()
 
     /* let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
         .expect("Failed to read");
 
-    let api_key = String::from("AIzaSyAPggT_5T9nNtdKwyp8L36UaVU65j98654");
+    let api_key = String::from("");:
 
     match youtube::video::find(input.trim(), &api_key, 1) {
 
