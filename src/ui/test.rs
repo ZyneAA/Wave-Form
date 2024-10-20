@@ -2,9 +2,10 @@ use std::io::stdout;
 
 use tui::{
     backend::CrosstermBackend,
-    widgets::{Block, Borders},
+    widgets::{Block, Borders, Paragraph},
     layout::{Layout, Constraint, Direction},
     Terminal,
+    text::{Spans, Span},
 };
 
 use crossterm::{
@@ -13,6 +14,9 @@ use crossterm::{
     event::{self, Event, KeyCode},
 };
 
+use super::components::input_handler;
+use crate::helper;
+
 pub fn test_render() -> Result<(), Box<dyn std::error::Error>> {
 
     enable_raw_mode()?;
@@ -20,6 +24,8 @@ pub fn test_render() -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+
+    let mut input = String::new();
 
     loop {
 
@@ -38,31 +44,53 @@ pub fn test_render() -> Result<(), Box<dyn std::error::Error>> {
                 .title("Bot Right")
                 .borders(Borders::ALL);
 
+            let paragraph = input_handler(&input, "Enter");
+
             let v_c_0 = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
                 .split(size);
 
             rect.render_widget(block_0, v_c_0[0]);
 
             let h_c_0 = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
                 .split(v_c_0[1]);
 
-            rect.render_widget(block_1, h_c_0[0]);
-            rect.render_widget(block_2, h_c_0[1]);
+            let h_c_1 = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                .split(h_c_0[0]);
+
+            rect.render_widget(paragraph, h_c_0[1]);
+            rect.render_widget(block_2, h_c_1[0]);
+            rect.render_widget(block_1, h_c_1[1]);
+
         })?;
 
         if let Event::Key(key) = event::read()? {
-            if key.code == KeyCode::Char('q') {
-                break;
+            match key.code {
+                KeyCode::Char(c) => {
+                    input.push(c);
+                }
+                KeyCode::Backspace => {
+                    input.pop();
+                }
+                KeyCode::Enter => {
+                    let args = helper::get_command_args(input.clone());
+                    println!("{:?}", args);
+                    input.clear();
+                }
+                KeyCode::Esc => {
+                    break;
+                }
+                _ => {}
             }
         }
 
     }
 
-    // Clean up terminal before exiting
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
 
