@@ -4,11 +4,13 @@ mod youtube;
 mod music;
 mod ui;
 mod helper;
+mod wave;
 
 fn main() -> Result<(), Box<dyn Error>> {
 
 
-    ui::test::test_render()
+    // :w
+    wave::start()
 
     /* let mut input = String::new();
     io::stdin()

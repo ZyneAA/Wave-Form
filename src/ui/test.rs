@@ -6,6 +6,7 @@ use tui::{
     layout::{Layout, Constraint, Direction},
     Terminal,
     text::{Spans, Span},
+    style::{Color, Modifier, Style},
 };
 
 use crossterm::{
@@ -44,7 +45,14 @@ pub fn test_render() -> Result<(), Box<dyn std::error::Error>> {
                 .title("Bot Right")
                 .borders(Borders::ALL);
 
-            let paragraph = input_handler(&input, "Enter");
+            let cmd_input = input_handler(&input, "Enter");
+
+            let text = vec![
+                Spans::from(Span::styled(&input, Style::default().fg(Color::Rgb(161, 24, 241)).add_modifier(Modifier::BOLD))),
+            ];
+
+            let paragraph = Paragraph::new(text)
+                .block(block_1);
 
             let v_c_0 = Layout::default()
                 .direction(Direction::Vertical)
@@ -63,9 +71,9 @@ pub fn test_render() -> Result<(), Box<dyn std::error::Error>> {
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
                 .split(h_c_0[0]);
 
-            rect.render_widget(paragraph, h_c_0[1]);
+            rect.render_widget(cmd_input, h_c_0[1]);
             rect.render_widget(block_2, h_c_1[0]);
-            rect.render_widget(block_1, h_c_1[1]);
+            rect.render_widget(paragraph, h_c_1[1]);
 
         })?;
 
@@ -79,7 +87,6 @@ pub fn test_render() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 KeyCode::Enter => {
                     let args = helper::get_command_args(input.clone());
-                    println!("{:?}", args);
                     input.clear();
                 }
                 KeyCode::Esc => {
