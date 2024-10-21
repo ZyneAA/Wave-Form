@@ -9,7 +9,6 @@ mod wave;
 fn main() -> Result<(), Box<dyn Error>> {
 
 
-    // :w
     wave::start()
 
     /* let mut input = String::new();

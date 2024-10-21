@@ -2,11 +2,10 @@ use std::io::stdout;
 
 use tui::{
     backend::CrosstermBackend,
-    widgets::{Block, Borders, Paragraph},
-    layout::{Layout, Constraint, Direction},
-    Terminal,
-    text::{Spans, Span},
-    style::{Color, Modifier, Style},
+    layout::{ Constraint, Direction, Layout },
+    style::{ Color, Modifier, Style },
+    text::{ Span, Spans }, widgets::{ Block, Borders, Paragraph },
+    Terminal
 
 };
 
@@ -16,8 +15,8 @@ use crossterm::{
     event::{self, Event, KeyCode},
 };
 
-use crate::helper;
-use crate::wave::config::WaveStyle;
+use crate::{helper, wave};
+use crate::wave::WaveStyle;
 
 pub fn input_handler<'a>(input: &'a str, desc: &'a str) -> Paragraph<'a> {
 
@@ -40,6 +39,11 @@ pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error
     let mut terminal = Terminal::new(backend)?;
 
     let mut input = String::new();
+
+    let mut text = vec![
+        Spans::from(Span::styled("All of your commands will be displayed here", Style::default().
+            fg(Color::Rgb(look.color_0[0], look.color_0[1], look.color_0[2])).add_modifier(Modifier::BOLD))),
+    ];
 
     loop {
 
@@ -67,11 +71,7 @@ pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error
 
             let cmd_input = input_handler(&input, "Enter");
 
-            let text = vec![
-                Spans::from(Span::styled(&input, Style::default().fg(Color::Rgb(161, 24, 241)).add_modifier(Modifier::BOLD))),
-            ];
-
-            let paragraph = Paragraph::new(text)
+            let paragraph = Paragraph::new(text.clone())
                 .block(block_1);
 
             let v_c_0 = Layout::default()
@@ -99,6 +99,7 @@ pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error
 
         if let Event::Key(key) = event::read()? {
             match key.code {
+
                 KeyCode::Char(c) => {
                     input.push(c);
                 }
@@ -106,13 +107,22 @@ pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error
                     input.pop();
                 }
                 KeyCode::Enter => {
-                    let _ = helper::get_command_args(input.clone());
+
+                    let cmds = helper::get_command_args(input.clone());
+                    let name = wave::command::execute_commands(&cmds);
+                    text.push(
+                        Spans::from(Span::styled(format!("> {}", name.clone()), Style::default().
+                            fg(Color::Rgb(look.color_0[0], look.color_0[1], look.color_0[2])).add_modifier(Modifier::ITALIC))),
+
+                    );
                     input.clear();
+
                 }
                 KeyCode::Esc => {
                     break;
                 }
                 _ => {}
+
             }
         }
 
