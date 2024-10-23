@@ -8,7 +8,7 @@ pub fn get_music_url(video_id: &str) -> Result<String, Box<dyn std::error::Error
 
     if output.status.success() {
         let url = String::from_utf8(output.stdout)?.trim().to_string();
-        Ok(String::from(url))
+        Ok(url)
     }
     else {
         Err("Failed to download audio".into())

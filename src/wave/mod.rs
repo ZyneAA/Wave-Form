@@ -7,8 +7,9 @@ pub mod command;
 use crate::ui::components;
 
 #[derive(Debug)]
-pub struct WaveStyle {
+pub struct WaveSettings {
 
+    pub api_key: Option<String>,
     pub border_color_0: [u8; 3],
     pub border_color_1: [u8; 3],
     pub border_color_2: [u8; 3],
@@ -20,11 +21,12 @@ pub struct WaveStyle {
 
 }
 
-impl WaveStyle {
+impl WaveSettings {
 
     pub fn new() -> Self {
 
-        WaveStyle {
+        WaveSettings {
+            api_key: None,
             border_color_0: [255 as u8, 255 as u8, 255 as u8],
             border_color_1: [255 as u8, 255 as u8, 255 as u8],
             border_color_2: [255 as u8, 255 as u8, 255 as u8],

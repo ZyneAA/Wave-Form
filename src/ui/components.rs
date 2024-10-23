@@ -1,4 +1,7 @@
 use std::io::stdout;
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::thread;
+use std::time::Duration;
 
 use tui::{
     backend::CrosstermBackend,
@@ -15,8 +18,8 @@ use crossterm::{
     event::{self, Event, KeyCode},
 };
 
-use crate::{helper, wave};
-use crate::wave::WaveStyle;
+use crate::{helper, wave::{self, command::ExecutedCommand}};
+use crate::wave::WaveSettings;
 
 pub fn input_handler<'a>(input: &'a str, desc: &'a str) -> Paragraph<'a> {
 
@@ -30,7 +33,13 @@ pub fn input_handler<'a>(input: &'a str, desc: &'a str) -> Paragraph<'a> {
 
 }
 
-pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error>> {
+pub fn render_main_view(settings: WaveSettings) -> Result<(), Box<dyn std::error::Error>> {
+
+    let worker_output: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let is_worker_finished = Arc::new(AtomicBool::new(false));
+
+    let worker_output_clone = Arc::clone(&worker_output);
+    let is_worker_finished_clone = Arc::clone(&is_worker_finished);
 
     enable_raw_mode()?;
     let mut stdout = stdout();
@@ -42,32 +51,54 @@ pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error
 
     let mut text = vec![
         Spans::from(Span::styled("All of your commands will be displayed here", Style::default().
-            fg(Color::Rgb(look.color_0[0], look.color_0[1], look.color_0[2])).add_modifier(Modifier::BOLD))),
+            fg(Color::Rgb(settings.color_0[0], settings.color_0[1], settings.color_0[2])).add_modifier(Modifier::BOLD))),
     ];
+
+    let monitor_thread = thread::spawn(move || {
+
+        loop {
+
+            if is_worker_finished_clone.load(Ordering::SeqCst) {
+                let output = worker_output_clone.lock().unwrap();
+                if let Some(result) = &*output {
+                    let finish = Spans::from(Span::styled(result.clone(),
+                        Style::default().fg(Color::Rgb(settings.color_0[0], settings.color_0[1], settings.color_0[2])).add_modifier(Modifier::BOLD)));
+                    println!("{}", result);
+                }
+                thread::sleep(Duration::from_millis(500));
+            }
+            else {
+                thread::sleep(Duration::from_millis(500));
+            }
+
+        }
+
+    });
 
     loop {
 
         terminal.draw(|rect| {
+
             let size = rect.size();
 
             let block_0 = Block::default()
                 .title("Top")
                 .borders(Borders::ALL)
                 .style(Style::default()
-                    .fg(Color::Rgb(look.border_color_0[0], look.border_color_0[1], look.border_color_0[2])));
+                    .fg(Color::Rgb(settings.border_color_0[0], settings.border_color_0[1], settings.border_color_0[2])));
 
             let block_1 = Block::default()
                 .title("Bot Left")
                 .borders(Borders::ALL)
                 .style(Style::default()
-                    .fg(Color::Rgb(look.border_color_1[0], look.border_color_1[1], look.border_color_1[2])));
+                    .fg(Color::Rgb(settings.border_color_1[0], settings.border_color_1[1], settings.border_color_1[2])));
 
 
             let block_2 = Block::default()
                 .title("Bot Right")
                 .borders(Borders::ALL)
                 .style(Style::default()
-                    .fg(Color::Rgb(look.border_color_2[0], look.border_color_2[1], look.border_color_2[2])));
+                    .fg(Color::Rgb(settings.border_color_2[0], settings.border_color_2[1], settings.border_color_2[2])));
 
             let cmd_input = input_handler(&input, "Enter");
 
@@ -98,6 +129,7 @@ pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error
         })?;
 
         if let Event::Key(key) = event::read()? {
+
             match key.code {
 
                 KeyCode::Char(c) => {
@@ -109,10 +141,12 @@ pub fn render_main_view(look: WaveStyle) -> Result<(), Box<dyn std::error::Error
                 KeyCode::Enter => {
 
                     let cmds = helper::get_command_args(input.clone());
-                    let name = wave::command::execute_commands(&cmds);
+                    let name: ExecutedCommand<String> = wave::command::execute_commands(&cmds, &settings.api_key, &worker_output, &is_worker_finished);
+                    let info = name.info;
+
                     text.push(
-                        Spans::from(Span::styled(format!("> {}", name.clone()), Style::default().
-                            fg(Color::Rgb(look.color_0[0], look.color_0[1], look.color_0[2])).add_modifier(Modifier::ITALIC))),
+                        Spans::from(Span::styled(format!("> {}", info.clone()), Style::default().
+                            fg(Color::Rgb(settings.color_0[0], settings.color_0[1], settings.color_0[2])).add_modifier(Modifier::ITALIC))),
 
                     );
                     input.clear();

@@ -1,6 +1,8 @@
 use reqwest::blocking::{ Client, get };
 use serde::Deserialize;
 
+use crate::wave::WaveErr;
+
 #[derive(Deserialize, Debug)]
 pub struct YoutubeItem {
 
@@ -53,28 +55,40 @@ pub struct ContentDetails {
 
 }
 
-pub fn find(querry: &str, api_key: &str, max_results: u64) -> Result<YoutubeResponse<YoutubeItem>, Box<dyn std::error::Error>> {
+pub fn find(querry: &str, api_key: &Option<String>, max_results: u64) -> Result<YoutubeResponse<YoutubeItem>, Box<dyn std::error::Error>> {
 
-    let url = "https://www.googleapis.com/youtube/v3/search";
-    let max_rows: String = max_results.to_string();
+    match api_key {
 
-    let client = Client::new();
-    let response = client
-        .get(url)
-        .query(&[
-            ("part", "snippet"),
-            ("q", querry),
-            ("key", api_key),
-            ("type", "video"),
-            ("maxResults", &max_rows),
-        ])
-        .send()?;
+        Some(key) => {
 
-    let bodie = response.text()?;
-    // println!("{}", bodie);
-    let response: YoutubeResponse<YoutubeItem> = serde_json::from_str(&bodie)?;
+            let url = "https://www.googleapis.com/youtube/v3/search";
+            let max_rows: String = max_results.to_string();
 
-    Ok(response)
+            let client = Client::new();
+            let response = client
+                .get(url)
+                .query(&[
+                    ("part", "snippet"),
+                    ("q", querry),
+                    ("key", key.as_str()),
+                    ("type", "video"),
+                    ("maxResults", &max_rows),
+                ])
+            .send()?;
+
+            let bodie = response.text()?;
+            let response: YoutubeResponse<YoutubeItem> = serde_json::from_str(&bodie)?;
+
+            Ok(response)
+
+        }
+        None => {
+
+            let err = WaveErr::new(String::from("No api key provided!"));
+            Err(Box::new(err))
+
+        }
+    }
 
 }
 
