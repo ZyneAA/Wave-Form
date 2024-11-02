@@ -1,5 +1,4 @@
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::Sender;
 
 use crate::music;
 use crate::youtube::video;
@@ -7,24 +6,24 @@ use crate::youtube::video;
 pub struct ExecutedCommand<T> {
 
     pub info: String,
-    pub execution_status: Option<T>,
+    pub execution_process: Option<T>,
 
 }
 
 impl<T> ExecutedCommand<T> {
 
-    pub fn new(info: String, execution_status: Option<T>) -> Self {
+    pub fn new(info: String, execution_process: Option<T>) -> Self {
 
         ExecutedCommand {
             info,
-            execution_status
+            execution_process
         }
 
     }
 
 }
 
-pub fn execute_commands(commands: &Vec<String>, api_key: &Option<String>, worker_output: &Arc<Mutex<Option<String>>>, is_worker_finished: &Arc<AtomicBool>) -> ExecutedCommand<String> {
+pub fn execute_commands(commands: &Vec<String>, api_key: &Option<String>, tx: &Sender<String>) -> ExecutedCommand<String> {
 
     if commands.len() == 0 {
         return ExecutedCommand::new(String::from("No command to execute"), None)
@@ -58,14 +57,16 @@ pub fn execute_commands(commands: &Vec<String>, api_key: &Option<String>, worker
                 match video::find(&name, api_key, 1) {
                     Ok(result) => {
 
-                        let worker_output_clone = Arc::clone(&worker_output);
-                        let is_worker_finished_clone = Arc::clone(&is_worker_finished);
+                        if result.items.len() == 0 {
+                            return ExecutedCommand::new(String::from("No video found"), None);
+                        }
 
                         let s = format!("{} {}", result.items[0].snippet.title, result.items[0].snippet.channel);
                         let audio_url = music::info::get_music_url(&result.items[0].id.video_id).unwrap();
-                        music::downloader::download_audio(&audio_url, result.items[0].snippet.title.as_str(), worker_output_clone, is_worker_finished_clone);
+                        music::downloader::download_audio(&audio_url, result.items[0].snippet.title.as_str(), tx.clone());
 
-                        return ExecutedCommand::new(s, None);
+                        let task = format!("Download Task   ===>   downloading :::: {}", s);
+                        return ExecutedCommand::new(format!("download {}", name), Some(task));
                     }
                     Err(e) => {
                         let s = format!("{}", e);

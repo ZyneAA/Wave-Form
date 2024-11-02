@@ -1,17 +1,29 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::error::Error;
+use std::sync::mpsc::Sender;
 
-use rodio::{Decoder, OutputStream, source::Source};
+use rodio::{ source::SamplesConverter, Decoder, Sink, Source };
 
-pub fn play_audio_from_local(audio_url: &str, length: u64) -> Result<(), Box<dyn Error>> {
+use super::song::Song;
+use super::super::wave::WaveErr;
 
-    let (_stream, stream_handle) = OutputStream::try_default()?;
+pub fn play_audio(sink: &Sink, mut song: Song) -> Result<(), Box<dyn Error>> {
 
-    let file = File::open(audio_url)?;
-    let source = Decoder::new(BufReader::new(file))?;
-    stream_handle.play_raw(source.convert_samples())?;
-    std::thread::sleep(std::time::Duration::from_secs(length));
+    sink.clear();
+    song.add_source();
+
+    match song.source {
+        Some(s) => {
+            sink.append(s);
+        },
+        None => {
+            let err = WaveErr::new(String::from("No Source found!"));
+            Err(Box::new(err))?
+        }
+    };
+
+    sink.play();
 
     Ok(())
 

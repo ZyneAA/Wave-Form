@@ -1,8 +1,11 @@
 use std::error::Error;
 use std::fmt;
 
+use rodio::{ OutputStream, Sink };
+
 pub mod config;
 pub mod command;
+pub mod test;
 
 use crate::ui::components;
 
@@ -66,10 +69,10 @@ impl Error for WaveErr {
 
 impl WaveErr {
 
-    pub fn new(how: String) -> Self {
+    pub fn new(log: String) -> Self {
 
         WaveErr {
-            log: how,
+            log
         }
 
     }
@@ -78,9 +81,13 @@ impl WaveErr {
 
 pub fn start() -> Result<(), Box<dyn Error>> {
 
-    let look = config::config_wave();
-    components::render_main_view(look).unwrap();
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let sink = Sink::try_new(&stream_handle).unwrap();
+
+    let look = config::config_wave().unwrap();
+    components::render_app(look, sink).unwrap();
+    //test::simulate_audio_wave().unwrap();
 
     Ok(())
-
 }
+

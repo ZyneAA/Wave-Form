@@ -1,12 +1,13 @@
 use std::env;
 use std::path::Path;
+use std::fs;
 
 use dotenv::from_path;
 
 use crate::helper;
 use crate::wave::WaveSettings;
 
-pub fn config_wave() -> WaveSettings {
+pub fn config_wave() -> Result<WaveSettings, Box<dyn std::error::Error>> {
 
     from_path(Path::new("./.env")).ok();
 
@@ -41,7 +42,13 @@ pub fn config_wave() -> WaveSettings {
 
     }
 
+    if Path::new("./music").exists() {
+        if !Path::new("./music").is_dir() {
+            fs::create_dir("./music")?;
+        }
+    }
+
     println!("{:?}", &wave);
-    wave
+    Ok(wave)
 
 }

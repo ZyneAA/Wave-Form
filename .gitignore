@@ -1,4 +1,5 @@
 /target
+/songs
 .DS_STORE
 .env
 

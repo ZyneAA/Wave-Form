@@ -1,11 +1,11 @@
 use std::process::Command;
 use std::error::Error;
+use std::sync::mpsc::Sender;
 use std::thread;
-use std::sync::{ Arc, Mutex, atomic::{ AtomicBool, Ordering } };
 
 use crate::wave::WaveErr;
 
-pub fn download_audio(audio_url: &str, file_name: &str, worker_output_clone: Arc<Mutex<Option<String>>>, is_worker_finished_clone: Arc<AtomicBool>) {
+pub fn download_audio(audio_url: &str, file_name: &str, tx: Sender<String>) {
 
 
     let audio_url = audio_url.to_string();
@@ -21,9 +21,7 @@ pub fn download_audio(audio_url: &str, file_name: &str, worker_output_clone: Arc
 
         };
 
-        let mut output = worker_output_clone.lock().unwrap();
-        *output = Some(s);
-        is_worker_finished_clone.store(true, Ordering::SeqCst);
+        tx.send(format!("Download complete: {}", s)).unwrap();
 
     });
 
@@ -31,12 +29,17 @@ pub fn download_audio(audio_url: &str, file_name: &str, worker_output_clone: Arc
 
 fn download(file_name: &str, audio_url: &str) -> Result<String, Box<dyn Error>> {
 
+    let file_name = file_name.replace('/', "-");
+
+    let audio_path = format!("songs/{}", file_name);
+
     let command = Command::new("yt-dlp")
-        .args(&["-x", "--audio-format", "mp3", "--output", &file_name, &audio_url])
+        .args(&["-x", "--audio-format", "mp3", "--output", &audio_path, audio_url])
         .output()?;
 
     if command.status.success() {
-        Ok(String::from("Download success"))
+        let s = file_name;
+        Ok(String::from(s))
     }
     else{
         let err = WaveErr::new(String::from("Failed to start yt-dlp, make sure yt-dlp is properly installed!"));
