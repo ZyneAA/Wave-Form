@@ -1,13 +1,14 @@
-use std::io::stdout;
-use std::sync::mpsc;
-use std::thread;
-use std::sync::{ Arc, Mutex };
-use std::time::Duration;
+use std::fs::File;
+use std::io::{stdout, BufReader};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::{thread, usize};
+use std::sync::{ Arc, Mutex, Condvar, atomic::{ AtomicBool, Ordering } };
+use std::time::{ Duration, Instant };
 
-use rodio::Sink;
+use rodio::{Decoder, Sink, Source};
 use tui::{
     backend::CrosstermBackend,
-    layout::{ Constraint, Direction, Layout },
+    layout::{ Constraint, Direction, Layout, Alignment },
     style::{ Color, Modifier, Style },
     text::{ Span, Spans }, widgets::{ Block, Borders, Paragraph, Sparkline },
     Terminal
@@ -79,6 +80,61 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
     });
 
+    const WAVE_SIZE: usize = 150;
+    const SAMPLE_COUNT: u64 = 128;
+    const WAVE_HEIGHT: u64 = 50;
+
+    let (source_tx, source_rx): (Sender<Decoder<BufReader<File>>>, Receiver<Decoder<BufReader<File>>>) = mpsc::channel();
+    let (data_tx, data_rx) = mpsc::sync_channel(1);
+    let (interval_tx, interval_rx) = mpsc::sync_channel(1);
+
+    thread::spawn(move || {
+
+        while let Ok(source) = source_rx.recv() {
+
+            let mut counter: usize = 0;
+            let mut sample_count: u64 = 0;
+            let mut idk: u64 = 0;
+
+            let duration = match source.total_duration() {
+                Some(val) => val,
+                _ => Duration::from_millis(100)
+            };
+            let update_count = 200;
+            let update_interval = (duration.as_millis() / update_count) as u64;
+            interval_tx.send(update_interval).unwrap();
+            println!("{:?} {:?}", update_interval, duration);
+
+            let mut upper: [u64; WAVE_SIZE] = [0; WAVE_SIZE];
+            let mut lower: [u64; WAVE_SIZE] = [50; WAVE_SIZE];
+
+            for i in source.convert_samples::<f32>() {
+
+                let amplitude = (i.abs() * WAVE_HEIGHT as f32) as u64;
+                idk += amplitude;
+
+                if sample_count == SAMPLE_COUNT {
+                    let avg = idk / SAMPLE_COUNT;
+                    upper[counter] = avg;
+                    lower[counter] = WAVE_HEIGHT - avg;
+                    sample_count = 0;
+                    idk = 0;
+                    counter += 1;
+                }
+
+                if counter == WAVE_SIZE - 1 {
+                    data_tx.send((upper, lower)).unwrap();
+                    counter = 0;
+                }
+
+                sample_count += 1;
+
+            }
+
+        }
+
+    });
+
     let mut current_song: usize = 0;
     let mut songs = music::info::get_local_songs
         (settings.color_0[0], settings.color_0[1], settings.color_0[2], settings.color_1[0], settings.color_1[1], settings.color_1[2], current_song)
@@ -86,23 +142,35 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
     let mut queue = music::song::Queue::new();
 
+    let mut prev_interval = 300; // Temp placeholder
+
+    // Refactoring is shit for now, but it works
     loop {
+
+        let interval = match interval_rx.try_recv() {
+            Ok(val) => {
+                prev_interval = val;
+                val
+            }
+            _ => {
+                if sink.empty() {
+                    300
+                }
+                else {
+                    prev_interval
+                }
+            }
+        };
 
         terminal.draw(|rect| {
 
             let size = rect.size();
 
-            let main_l_block = Block::default()
+            let song_list_block = Block::default()
                 .title(" ~~~~ W A V E  F O R M ~~~~ ")
                 .borders(Borders::ALL)
                 .style(Style::default()
                     .fg(Color::Rgb(border_color[0][0], border_color[0][1], border_color[0][2])));
-
-            let main_r_block = Block::default()
-                .title("")
-                .borders(Borders::ALL)
-                .style(Style::default()
-                    .fg(Color::Rgb(border_color[1][0], border_color[1][1], border_color[1][2])));
 
             let cmd_block = Block::default()
                 .title("--\\ Commands \\--")
@@ -111,16 +179,39 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                     .fg(Color::Rgb(border_color[3][0], border_color[3][1], border_color[3][2])));
 
             let task_block = Block::default()
-                .title(format!("{} {:?} {}", songs.len() - 1, border_color[current_block], current_song))
+                .title(format!("{} {:?} {}", interval, border_color[current_block], current_song))
                 .borders(Borders::ALL)
                 .style(Style::default()
                    .fg(Color::Rgb(border_color[2][0], border_color[2][1], border_color[2][2])));
 
-            let line = Sparkline::default()
-                .block(Block::default().title("Sparkline").borders(Borders::ALL))
-                .data(&[0, 2, 3, 4, 1, 4, 10, 20, 1, 132, 312, 1, 0, 23])
-                .max(10)
-                .style(Style::default().fg(Color::Red));
+            let title_block = Block::default()
+                .title(format!("{}", songs.get(current_song).unwrap().0[0].content))
+                .borders(Borders::TOP | Borders::BOTTOM)
+                .title_alignment(Alignment::Center)
+                .style(Style::default()
+                    .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+                    .bg(Color::Rgb(settings.color_2[0], settings.color_2[1], settings.color_2[2]))
+                    .fg(Color::Rgb(settings.color_0[0], settings.color_0[1], settings.color_0[2])));
+
+            let (i, j) = match data_rx.try_recv() {
+                Ok((upper, lower)) => (upper, lower),
+                _ => ([0; WAVE_SIZE], [50; WAVE_SIZE]),
+            };
+
+            let upper_sparkline = Sparkline::default()
+                .block(Block::default().borders(Borders::NONE))
+                .data(&i)
+                .max(WAVE_HEIGHT)
+                .style(Style::default().fg(Color::LightRed).bg(Color::Black)
+                    .add_modifier(Modifier::ITALIC));
+
+            let lower_sparkline = Sparkline::default()
+                .block(Block::default().borders(Borders::NONE))
+                .data(&j)
+                .max(WAVE_HEIGHT)
+                .style(Style::default().bg(Color::Black).fg(Color::LightGreen)
+                    .add_modifier(Modifier::REVERSED));
+
 
             let cmd_input = input_handler(&input, "♫⋆｡♪ ₊˚♬ﾟ.", border_color[4][0], border_color[4][1], border_color[4][2]);
 
@@ -131,7 +222,7 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                 .block(task_block);
 
             let songs_paragraph = Paragraph::new(songs.clone())
-                .block(main_l_block);
+                .block(song_list_block);
 
             let v_c_0 = Layout::default()
                 .direction(Direction::Vertical)
@@ -143,8 +234,16 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                 .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
                 .split(v_c_0[0]);
 
+            let v_c_2 = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(25), Constraint::Percentage(6), Constraint::Percentage(25), Constraint::Percentage(10), Constraint::Percentage(30)].as_ref())
+                .split(v_c_1[1]);
+
+            rect.render_widget(title_block, v_c_2[1]);
+            rect.render_widget(upper_sparkline, v_c_2[0]);
+            rect.render_widget(lower_sparkline, v_c_2[2]);
+
             rect.render_widget(songs_paragraph, v_c_1[0]);
-            rect.render_widget(line, v_c_1[1]);
 
             let h_c_0 = Layout::default()
                 .direction(Direction::Vertical)
@@ -162,7 +261,7 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
         })?;
 
-        if event::poll(Duration::from_millis(500))? {
+        if event::poll(Duration::from_millis(155))? {
 
             if let Event::Key(key) = event::read()? {
 
@@ -209,7 +308,7 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                             else if current_block == 0 {
 
                                 let title = songs.get(current_song).unwrap();
-                                let url = format!("./songs/{}", title.0[0].content);
+                                let url = format!("./songs/{}.mp3", title.0[0].content);
                                 let title = title.0[0].content.clone();
 
                                 let song = music::song::Song::new(String::from(title), url, None);
@@ -296,7 +395,7 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                             if current_block == 0 {
 
                                 let title = songs.get(current_song).unwrap();
-                                let url = format!("./songs/{}", title.0[0].content);
+                                let url = format!("./songs/{}.mp3", title.0[0].content);
                                 let ok = title.0[0].content.clone();
                                 let title = title.0[0].content.clone();
 
@@ -329,7 +428,7 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                             if current_block == 0 {
 
                                 let title = songs.get(current_song).unwrap();
-                                let url = format!("./songs/{}", title.0[0].content);
+                                let url = format!("./songs/{}.mp3", title.0[0].content);
                                 let ok = title.0[0].content.clone();
                                 let title = title.0[0].content.clone();
 
@@ -376,7 +475,7 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
             match queue.get_first() {
                 Some(s) => {
-                    music::player::play_audio(&sink, s).unwrap();
+                    music::player::play_audio(&sink, s, &source_tx).unwrap();
                 }
                 None => {}
             }
@@ -387,6 +486,8 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    //execute!(terminal.backend_mut())?;
 
     Ok(())
+
 }

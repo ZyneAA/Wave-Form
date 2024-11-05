@@ -37,6 +37,12 @@ impl Song {
 
     }
 
+    pub fn get_source(&self) -> Decoder<BufReader<File>> {
+
+        get_source(&self.path).unwrap()
+
+    }
+
 }
 
 pub struct Queue{

@@ -36,13 +36,14 @@ pub fn get_local_songs<'a>(color_0: u8, color_1: u8, color_2: u8, selected_color
             if let Some(extension) = path.extension() {
                 if extension == "mp3" {
                     if let Some(path_str) = path.to_str() {
+                        let name = path_str.strip_suffix(".mp3").unwrap_or(path_str);
                         if target == a {
-                            songs.push(Spans::from(Span::styled(String::from(&path_str[8..]), Style::default().
+                            songs.push(Spans::from(Span::styled(String::from(&name[8..]), Style::default().
                                 fg(Color::Rgb(color_0, color_1, color_2))
                                 .bg(Color::Rgb(selected_color_0, selected_color_1, selected_color_2)).add_modifier(Modifier::BOLD))));
                         }
                         else {
-                            songs.push(Spans::from(Span::styled(String::from(&path_str[8..]), Style::default().
+                            songs.push(Spans::from(Span::styled(String::from(&name[8..]), Style::default().
                                 fg(Color::Rgb(color_0, color_1, color_2)).add_modifier(Modifier::BOLD))));
                         }
                     }

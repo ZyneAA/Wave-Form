@@ -8,6 +8,7 @@ mod wave;
 
 fn main() -> Result<(), Box<dyn Error>> {
 
+    //wave::test::simulate_audio_wave()
     wave::start()
 
 }

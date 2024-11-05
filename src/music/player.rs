@@ -1,17 +1,19 @@
+use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
-use std::error::Error;
 use std::sync::mpsc::Sender;
 
-use rodio::{ source::SamplesConverter, Decoder, Sink, Source };
+use rodio::{Decoder, Sink};
 
 use super::song::Song;
 use super::super::wave::WaveErr;
 
-pub fn play_audio(sink: &Sink, mut song: Song) -> Result<(), Box<dyn Error>> {
+pub fn play_audio(sink: &Sink, mut song: Song, wave_tx: &Sender<Decoder<BufReader<File>>>) -> Result<(), Box<dyn Error>> {
 
     sink.clear();
     song.add_source();
+
+    let source = song.get_source();
 
     match song.source {
         Some(s) => {
@@ -24,6 +26,8 @@ pub fn play_audio(sink: &Sink, mut song: Song) -> Result<(), Box<dyn Error>> {
     };
 
     sink.play();
+
+    wave_tx.send(source);
 
     Ok(())
 
