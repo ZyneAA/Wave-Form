@@ -12,7 +12,6 @@ mod wave;
 
 fn main() -> Result<(), Box<dyn Error>> {
 
-    //let api_key = Some(String::from("AIzaSyD0J13tnnEdnJY4egLIZoDX6P2y2LykImM"));
     //let response  = youtube::video::find("Luther Kendrick Lamer", &api_key, 1).unwrap();
     //let url = music::info::get_music_url(&response.items[0].id.video_id).unwrap();
 
