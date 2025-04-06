@@ -27,7 +27,7 @@ pub fn play_audio(sink: &Sink, mut song: Song, wave_tx: &Sender<Decoder<BufReade
 
     sink.play();
 
-    wave_tx.send(source);
+    wave_tx.send(source).unwrap();
 
     Ok(())
 

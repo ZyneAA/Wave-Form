@@ -1,15 +1,40 @@
 use core::fmt;
-use std::collections::VecDeque;
+use std::time::Duration;
+use std::{collections::VecDeque, u128};
 use std::fs::File;
 use std::io::BufReader;
 use std::error::Error;
 
+use id3::{Tag, TagLike, Version};
 use rodio::Decoder;
+
+pub struct MetaData {
+
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub genere: Option<String>,
+    pub release_date: Option<String>,
+
+}
+
+impl MetaData {
+
+    pub fn new(artist: Option<String>, album: Option<String>, genere: Option<String>, duration: Option<Duration>, release_date: Option<String>) -> MetaData {
+
+        MetaData {
+            artist,
+            album,
+            genere,
+            release_date,
+        }
+
+    }
+
+}
 
 pub struct Song {
 
     pub title: String,
-    pub artist: String,
     pub path: String,
     pub source: Option<Decoder<BufReader<File>>>
 
@@ -17,14 +42,10 @@ pub struct Song {
 
 impl Song {
 
-    pub fn new(title: String, path: String, artist: Option<String>) -> Song {
+    pub fn new(title: String, path: String) -> Song {
 
         Song {
             title,
-            artist: match artist {
-                Some(val) => String::from(val),
-                None => String::from("Unknown")
-            },
             path,
             source: None
         }
@@ -144,5 +165,29 @@ fn get_source(audio_url: &str) -> Result<Decoder<BufReader<File>>, Box<dyn Error
     let source = Decoder::new(BufReader::new(file))?;
 
     Ok(source)
+
+}
+
+pub fn add_meta_data_to_mp3(path: &str, meta_data: MetaData) {
+
+    let mut tag = Tag::read_from_path(path).unwrap_or_else(|_| Tag::new());
+
+    tag.set_artist(meta_data.artist.unwrap_or("Unknown".to_string()));
+    tag.set_album(meta_data.album.unwrap_or("Unknown".to_string()));
+    tag.set_genre(meta_data.genere.unwrap_or("Unknown".to_string()));
+
+    tag.write_to_path(path, Version::Id3v24).unwrap();
+
+}
+
+pub fn get_meta_data(path: &str) -> Result<MetaData, Box<dyn std::error::Error>> {
+
+    let tag = Tag::read_from_path(path)?;
+
+    let artist = String::from(tag.artist().unwrap_or("Unknown Artist"));
+    let album = String::from(tag.album().unwrap_or("Unknown Album"));
+    let genre = String::from(tag.genre().unwrap_or("Unknown Genre"));
+
+    Ok(MetaData::new(Some(artist), Some(album), Some(genre), None, None))
 
 }

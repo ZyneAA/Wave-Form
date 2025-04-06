@@ -3,11 +3,11 @@ use std::fmt;
 
 use rodio::{ OutputStream, Sink };
 
+use super::ui;
+
 pub mod config;
 pub mod command;
 pub mod test;
-
-use crate::ui::components;
 
 #[derive(Debug)]
 pub struct WaveSettings {
@@ -85,7 +85,7 @@ pub fn start() -> Result<(), Box<dyn Error>> {
     let sink = Sink::try_new(&stream_handle).unwrap();
 
     let look = config::config_wave().unwrap();
-    components::render_app(look, sink).unwrap();
+    ui::render_app(look, sink).unwrap();
     //test::simulate_audio_wave().unwrap();
 
     Ok(())

@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 tui = "0.19"
+id3 = "1.15.0"
 crossterm = "0.25"
 reqwest = { version = "0.12.8", features = ["blocking", "json"] }
 serde = { version = "1.0.210", features = ["derive"] }
