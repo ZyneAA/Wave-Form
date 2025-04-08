@@ -166,7 +166,7 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
             let size = rect.size();
 
-            let song_list_block = components::create_block(" ~~~ W A V E  F O R M ~~~ ", border_color[0], 0);
+            let playlists_block = components::create_block(" ~~~ W A V E  F O R M ~~~ ", border_color[0], 0);
             let cmd_block = components::create_block("---// Commands //---", border_color[2], 0);
             let task_block = components::create_block("---//Tasks //---", border_color[1], 0);
 
@@ -234,18 +234,44 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
             let task_paragraph = Paragraph::new(tasks.lock().unwrap().clone())
                 .block(task_block);
 
-            let songs_paragraph = Paragraph::new(songs.clone())
-                .block(song_list_block);
+            let playlists = Paragraph::new(songs.clone())
+                .block(playlists_block);
 
-            let v_c_0 = Layout::default()
+            let main_split = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
                 .split(size);
 
-            let v_c_1 = Layout::default()
+            // main_split(ms), the very split that splits 70-30 vertically that forms new sub-layouts
+
+            // Vertical split produces two horizontal layouts
+            // |    |   |    |
+            // |    | | |    |
+            // |    | | |    |
+            // |    |   |    |
+
+            // Horizontal split produces two vertical layouts
+            // ---------------
+            //
+            //
+            // ---------------
+            //      ----
+            // ---------------
+            //
+            //
+            // ---------------
+
+            // l and r mean left and right
+            // u and d mean up and down
+
+            // Naming convention of splitting the Layouts
+            // ms_l_r means splitting main_split again, left and right
+            // msl_u_d means splitting the left side of ms horizontally, into two vertical layouts ↕️
+
+            let ms_l_r = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
-                .split(v_c_0[0]);
+                .split(main_split[0]);
 
             let v_c_2 = Layout::default()
                 .direction(Direction::Vertical)
@@ -253,12 +279,29 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                     Constraint::Percentage(25),
                     Constraint::Percentage(10),
                     Constraint::Percentage(65)].as_ref())
-                .split(v_c_1[1]);
+                .split(ms_l_r[1]);
 
             let song_info = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
+                .constraints([Constraint::Percentage(40), Constraint::Percentage(60)].as_ref())
                 .split(v_c_2[2]);
+
+            let meta = match current_song_metadata.as_ref() {
+                Some(val) => val,
+                None => &song::MetaData::new(None, None, None, None, None)
+            };
+
+            let song_length = match total_sec {
+                0.0 => String::from("0:00"),
+                _ => {
+                    let minutes = (total_sec / 60.0).floor() as u32;
+                    let secs = (total_sec % 60.0).round() as u32;
+                    format!("{:02}:{:02}", minutes, secs)
+                }
+            };
+
+            let vol_display = format!("{:.1}", &vol);
+            let speed_display = format!("{:.1}", &speed);
 
             let tips_block = create_block("", settings.color_0, 0);
             let tip_vec = vec![
@@ -277,6 +320,60 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                 Spans::from(vec![
                     Span::styled("Stop: Z", Style::default().add_modifier(Modifier::BOLD))
                 ]),
+               Spans::from(vec![
+                    Span::styled("Volume Up: M", Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::styled("Volume Down: N", Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::styled("Speed Up: L", Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::styled("Speed Down: K", Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::raw("--------------")
+                ]),
+                Spans::from(vec![
+                    Span::raw("Title: "),
+                    Span::styled(current_song_title.as_str(), Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::raw("Artist: "),
+                    Span::styled(meta.artist.as_ref().unwrap_or(&unknown), Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::raw("Genere: "),
+                    Span::styled(meta.genere.as_ref().unwrap_or(&unknown), Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::raw("Duration: "),
+                    Span::styled(song_length.as_str(), Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::raw("-------------")
+                ]),
+                Spans::from(vec![
+                    Span::raw("Volume: "),
+                    Span::styled(vol_display, Style::default().add_modifier(Modifier::ITALIC))
+                ]),
+                Spans::from(vec![
+                    Span::raw("Speed: "),
+                    Span::styled(speed_display, Style::default().add_modifier(Modifier::ITALIC))
+                ]),
+                Spans::from(vec![
+                    Span::raw("-------------")
+                ]),
+                Spans::from(vec![
+                    Span::styled("[! NORMAL] [@ REPEAT] [# SHUFFLE]", Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+               Spans::from(vec![
+                    Span::styled("[> NEXT] [< PREV]", Style::default().add_modifier(Modifier::ITALIC)),
+                ]),
+                Spans::from(vec![
+                    Span::raw("-------------")
+                ]),
             ];
             let tip_para = create_paragraph(tip_vec.clone()).block(tips_block);
 
@@ -289,6 +386,8 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(30), Constraint::Percentage(70)].as_ref())
                 .split(song_info_detail[1]);
+
+            let temp = create_block("wd", settings.color_0, 0);
 
             let ascii_block = create_block("", settings.color_0, 0);
 
@@ -314,70 +413,17 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
             let ok = ascii_to_spans(ascii);
             let ascii_para = create_paragraph(ok.clone()).block(ascii_block);
 
-            let meta_block = create_block("", settings.color_0, 0);
-            let meta = match current_song_metadata.as_ref() {
-                Some(val) => val,
-                None => &song::MetaData::new(None, None, None, None, None)
-            };
-
-            let song_length = match total_sec {
-                0.0 => String::from("0:00"),
-                _ => {
-                    let minutes = (total_sec / 60.0).floor() as u32;
-                    let secs = (total_sec % 60.0).round() as u32;
-                    format!("{:02}:{:02}", minutes, secs)
-                }
-            };
-            let song_meta_data_span_vec = vec![
-                Spans::from(vec![
-                    Span::raw("Title: "),
-                    Span::styled(current_song_title.as_str(), Style::default().add_modifier(Modifier::ITALIC)),
-                ]),
-                Spans::from(vec![
-                    Span::raw("Artist: "),
-                    Span::styled(meta.artist.as_ref().unwrap_or(&unknown), Style::default().add_modifier(Modifier::ITALIC)),
-                ]),
-                Spans::from(vec![
-                    Span::raw("Genere: "),
-                    Span::styled(meta.genere.as_ref().unwrap_or(&unknown), Style::default().add_modifier(Modifier::ITALIC)),
-                ]),
-                Spans::from(vec![
-                    Span::raw("Duration: "),
-                    Span::styled(song_length.as_str(), Style::default().add_modifier(Modifier::ITALIC)),
-                ]),
-            ];
-            let meta_para = create_paragraph(song_meta_data_span_vec.clone()).block(meta_block);
-
-            // Song control ui
-
-            let vol_display = format!("{:.1}", &vol);
-            let speed_display = format!("{:.1}", &speed);
-
-            let song_control_block = create_block("", settings.color_0, 0);
-            let song_control_vec = vec![
-                Spans::from(vec![
-                    Span::raw("Volume: "),
-                    Span::styled(vol_display, Style::default().add_modifier(Modifier::ITALIC))
-                ]),
-                Spans::from(vec![
-                    Span::raw("Speed: "),
-                    Span::styled(speed_display, Style::default().add_modifier(Modifier::ITALIC))
-                ]),
-            ];
-            let song_control_para = create_paragraph(song_control_vec.clone()).block(song_control_block);
-
+            rect.render_widget(temp, song_info_detail_r[0]);
             rect.render_widget(ascii_para, song_info_detail[0]);
-            rect.render_widget(meta_para, song_info_detail_r[0]);
-            rect.render_widget(song_control_para, song_info_detail_r[1]);
             rect.render_widget(tip_para, song_info[1]);
             rect.render_widget(holu, v_c_2[1]);
             rect.render_widget(upper_sparkline, v_c_2[0]);
-            rect.render_widget(songs_paragraph, v_c_1[0]);
+            rect.render_widget(playlists, ms_l_r[0]);
 
             let h_c_0 = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
-                .split(v_c_0[1]);
+                .split(main_split[1]);
 
             let h_c_1 = Layout::default()
                 .direction(Direction::Horizontal)
