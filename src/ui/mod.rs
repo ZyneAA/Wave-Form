@@ -166,22 +166,76 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
             let size = rect.size();
 
-            let playlists_block = components::create_block(" ~~~ W A V E  F O R M ~~~ ", border_color[0], 0);
-            let cmd_block = components::create_block("---// Commands //---", border_color[2], 0);
-            let task_block = components::create_block("---//Tasks //---", border_color[1], 0);
+            // ms_u_d, the very first split that splits 70% top and 30% bottom
+            let ms_u_d = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
+                .split(size);
 
-            if current_song_title == "" {
-                current_song_title.push_str("Unknown");
-            }
-            let title_block = Block::default()
-                .title(format!("{}", current_song_title))
-                .borders(Borders::TOP | Borders::BOTTOM)
-                .title_alignment(Alignment::Center)
-                .style(Style::default()
-                    .add_modifier(Modifier::BOLD | Modifier::ITALIC)
-                    .bg(Color::Rgb(settings.color_2[0], settings.color_2[1], settings.color_2[2]))
-                    .fg(Color::Rgb(settings.color_0[0], settings.color_0[1], settings.color_0[2])));
+            // Vertical split produces two horizontal layouts
+            // |    |   |    |
+            // |    | | |    |
+            // |    | | |    |
+            // |    |   |    |
 
+            // Horizontal split produces two vertical layouts
+            // ---------------
+            //
+            //
+            // ---------------
+            //      ----
+            // ---------------
+            //
+            //
+            // ---------------
+
+            // ms_u_d(main split up and down)
+            // +--------------+
+            // |              |
+            // |      70%     |
+            // |              |
+            // +--------------+
+            // |      30%     |
+            // +--------------+
+
+            // l and r mean left and right
+            // u and d mean up and down
+
+
+            // Naming convention of splitting the Layouts
+            // ------------------------------------------
+            // msu_l_r means splitting the top side of ms_u_d into left and right sides
+            // msur_u_d means splitting the right side of msu_l_r into top and down sides
+            // l_something means its a Layout named 'something'
+            // b_something means a block
+            // p_something means a paragraph
+            // Something like main_info or main_display will be called mi or md in the future
+
+            let msu_l_r = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
+                .split(ms_u_d[0]);
+
+            // The left of msu_l_r
+            let b_playlists = components::create_block(" ~~~ W A V E  F O R M ~~~ ", border_color[0], 0);
+            let playlists = Paragraph::new(songs.clone())
+                .block(b_playlists);
+
+            // The layouts from the following split will be named main_info_0, 1, 2 respectively
+            // 0 is about real-time sound analysis
+            // 1 is about the duration of the song
+            // 2 is about the info related to the songs, keymaps, and others
+            let msur_u_d = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Percentage(25),
+                    Constraint::Percentage(7),
+                    Constraint::Percentage(3),
+                    Constraint::Percentage(65)].as_ref())
+                .split(msu_l_r[1]);
+
+            // msur_u_d[0] starts here
+            // Real-time sound analyzer
             let total_sec = match duration {
                 Some(val) => val.as_secs() as f64,
                 None => 0 as f64
@@ -201,18 +255,6 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
                 }
             };
 
-            time_stamp_arr[prev_index] = '■';
-            time_stamp_arr[current_pos as usize] = '⦿';
-            prev_index = current_pos as usize;
-            let time_stamp: String = time_stamp_arr.iter().collect();
-
-            let hol = vec![
-                Spans::from(vec![
-                    Span::styled(time_stamp, Style::default().add_modifier(Modifier::BOLD))
-                ]),
-            ];
-            let holu = create_paragraph(hol).block(title_block);
-
             let (i, j) = match data_rx.try_recv() {
                 Ok((upper, lower)) => (upper, lower),
                 _ => ([0; WAVE_SIZE], [50; WAVE_SIZE]),
@@ -227,65 +269,37 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 
             let t = format!("{} - {} - {}", sink_current_pos, current_pos, total_sec);
             let cmd_input = components::input_handler(&input, t.as_str(), border_color[3][0], border_color[3][1], border_color[3][2]);
+            // msur_u_d[0] ends here
 
-            let cmd_paragraph = Paragraph::new(cmds.clone())
-                .block(cmd_block);
+            // The part of msur_u_d[1] starts here
+            // The timeline showing the duration and current position of the song
+            time_stamp_arr[prev_index] = '■';
+            time_stamp_arr[current_pos as usize] = '⦿';
+            prev_index = current_pos as usize;
+            let time_stamp: String = time_stamp_arr.iter().collect();
 
-            let task_paragraph = Paragraph::new(tasks.lock().unwrap().clone())
-                .block(task_block);
+            if current_song_title == "" {
+                current_song_title.push_str("Unknown");
+            }
 
-            let playlists = Paragraph::new(songs.clone())
-                .block(playlists_block);
+            let b_title = Block::default()
+                .title(format!("{}", current_song_title))
+                .borders(Borders::ALL)
+                .title_alignment(Alignment::Center)
+                .style(Style::default()
+                    .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+                    .bg(Color::Rgb(settings.color_2[0], settings.color_2[1], settings.color_2[2]))
+                    .fg(Color::Rgb(settings.color_0[0], settings.color_0[1], settings.color_0[2])));
 
-            let main_split = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
-                .split(size);
+            let hol = vec![
+                Spans::from(vec![
+                    Span::styled(time_stamp, Style::default().add_modifier(Modifier::BOLD))
+                ]),
+            ];
+            let holu = create_paragraph(hol).block(b_title);
+            // msur_u_d[1] ends here
 
-            // main_split(ms), the very split that splits 70-30 vertically that forms new sub-layouts
-
-            // Vertical split produces two horizontal layouts
-            // |    |   |    |
-            // |    | | |    |
-            // |    | | |    |
-            // |    |   |    |
-
-            // Horizontal split produces two vertical layouts
-            // ---------------
-            //
-            //
-            // ---------------
-            //      ----
-            // ---------------
-            //
-            //
-            // ---------------
-
-            // l and r mean left and right
-            // u and d mean up and down
-
-            // Naming convention of splitting the Layouts
-            // ms_l_r means splitting main_split again, left and right
-            // msl_u_d means splitting the left side of ms horizontally, into two vertical layouts ↕️
-
-            let ms_l_r = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
-                .split(main_split[0]);
-
-            let v_c_2 = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(25),
-                    Constraint::Percentage(10),
-                    Constraint::Percentage(65)].as_ref())
-                .split(ms_l_r[1]);
-
-            let song_info = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(40), Constraint::Percentage(60)].as_ref())
-                .split(v_c_2[2]);
-
+            // msur_u_d[3] starts here
             let meta = match current_song_metadata.as_ref() {
                 Some(val) => val,
                 None => &song::MetaData::new(None, None, None, None, None)
@@ -377,15 +391,14 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
             ];
             let tip_para = create_paragraph(tip_vec.clone()).block(tips_block);
 
-            let song_info_detail = Layout::default()
+            // main_info[2]
+            let mi2_l_r = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
-                .split(song_info[0]);
-
-            let song_info_detail_r= Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(30), Constraint::Percentage(70)].as_ref())
-                .split(song_info_detail[1]);
+                .constraints(
+                    [Constraint::Percentage(15),
+                    Constraint::Percentage(60),
+                    Constraint::Percentage(25)].as_ref())
+                .split(msur_u_d[3]);
 
             let temp = create_block("wd", settings.color_0, 0);
 
@@ -412,27 +425,43 @@ pub fn render_app(settings: WaveSettings, sink: Sink) -> Result<(), Box<dyn std:
 "#;
             let ok = ascii_to_spans(ascii);
             let ascii_para = create_paragraph(ok.clone()).block(ascii_block);
+            // msur_u_d[3] ends here
 
-            rect.render_widget(temp, song_info_detail_r[0]);
-            rect.render_widget(ascii_para, song_info_detail[0]);
-            rect.render_widget(tip_para, song_info[1]);
-            rect.render_widget(holu, v_c_2[1]);
-            rect.render_widget(upper_sparkline, v_c_2[0]);
-            rect.render_widget(playlists, ms_l_r[0]);
-
-            let h_c_0 = Layout::default()
+            // This following part code is responsible for rendering the bottom part of ms_u_d(the first split)
+            let msd_u_d = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
-                .split(main_split[1]);
+                .split(ms_u_d[1]);
 
-            let h_c_1 = Layout::default()
+            // msd_u_d[0] starts here
+            let msdu_l_r = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-                .split(h_c_0[0]);
+                .split(msd_u_d[0]);
 
-            rect.render_widget(cmd_input, h_c_0[1]);
-            rect.render_widget(task_paragraph, h_c_1[0]);
-            rect.render_widget(cmd_paragraph, h_c_1[1]);
+            let cmd_block = components::create_block("---// Commands //---", border_color[2], 0);
+            let task_block = components::create_block("---// Tasks //---", border_color[1], 0);
+
+            let cmd_paragraph = Paragraph::new(cmds.clone())
+                .block(cmd_block);
+
+            let task_paragraph = Paragraph::new(tasks.lock().unwrap().clone())
+                .block(task_block);
+            // msd_u_d[0] ends here
+
+            // msd_u_d[1]
+            let cmd_input = components::input_handler(&input, t.as_str(), border_color[3][0], border_color[3][1], border_color[3][2]);
+
+            // Rendering all layouts
+            rect.render_widget(temp, mi2_l_r[1]);
+            rect.render_widget(ascii_para, mi2_l_r[0]);
+            rect.render_widget(tip_para, mi2_l_r[2]);
+            rect.render_widget(holu, msur_u_d[1]);
+            rect.render_widget(upper_sparkline, msur_u_d[0]);
+            rect.render_widget(playlists, msu_l_r[0]);
+            rect.render_widget(cmd_input, msd_u_d[1]);
+            rect.render_widget(task_paragraph, msdu_l_r[0]);
+            rect.render_widget(cmd_paragraph, msdu_l_r[1]);
 
         })?;
 
